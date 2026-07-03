@@ -1,0 +1,5 @@
+2026/07/03-16:20:35.476 2db8 Creating DB C:\Users\rober\OneDrive\Área de Trabalho\chatbot mosteiro\.wwebjs_auth\session\Default\EdgeCoupons/coupons_data.db since it was missing.
+2026/07/03-16:20:35.730 2db8 Reusing MANIFEST C:\Users\rober\OneDrive\Área de Trabalho\chatbot mosteiro\.wwebjs_auth\session\Default\EdgeCoupons/coupons_data.db/MANIFEST-000001
+2026/07/03-16:20:39.509 1b48 Level-0 table #5: started
+2026/07/03-16:20:39.513 1b48 Level-0 table #5: 682901 bytes OK
+2026/07/03-16:20:39.514 1b48 Delete type=0 #3
