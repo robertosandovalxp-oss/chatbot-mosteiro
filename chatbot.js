@@ -2,26 +2,26 @@
 // IMPORTAÇÕES
 // =====================================
 const qrcode = require("qrcode-terminal");
-const { Client, LocalAuth } = require("whatsapp-web.js");
-const http = require("http"); // Servidor nativo para o Render não derrubar a máquina
+const { Client, NoAuth } = require("whatsapp-web.js"); // Mudamos temporariamente para NoAuth para estabilizar o contêiner
+const http = require("http");
 
 // =====================================
-// SERVIDOR WEB FALSO (Para satisfazer o Render)
+// SERVIDOR WEB (Mantém o Render estável)
 // =====================================
 const PORT = process.env.PORT || 10000;
 const server = http.createServer((req, res) => {
   res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
-  res.end("Robô do Mosteiro ativo 🌿");
+  res.end("Robô do Mosteiro ativo e monitorado 🌿");
 });
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`📡 Servidor de monitoramento escutando na porta ${PORT}`);
+  console.log(`📡 Servidor de monitoramento ativo na porta ${PORT}`);
 });
 
 // =====================================
-// CONFIGURAÇÃO DO CLIENTE (VERSÃO BLINDADA)
+// CONFIGURAÇÃO DO CLIENTE (MÁXIMA ESTABILIDADE)
 // =====================================
 const client = new Client({
-  authStrategy: new LocalAuth(),
+  authStrategy: new NoAuth(), 
   puppeteer: {
     headless: true,
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
@@ -35,16 +35,19 @@ const client = new Client({
       '--disable-extensions',
       '--disable-component-update',
       '--disable-web-security',
-      '--disable-features=IsolateOrigins,site-per-process', 
+      '--disable-features=IsolateOrigins,site-per-process',
+      '--disable-session-crashed-bubble',
+      '--disable-infobars',
+      '--unhandled-rejections=strict'
     ],
   },
 });
 
 // =====================================
-// QR CODE (Para conectar o WhatsApp)
+// QR CODE
 // =====================================
 client.on("qr", (qr) => {
-  console.log("📲 Escaneie o QR Code abaixo com o WhatsApp:");
+  console.log("📲 ESCANEIE O QR CODE ABAIXO:");
   qrcode.generate(qr, { small: true });
 });
 
@@ -52,12 +55,9 @@ client.on("qr", (qr) => {
 // WHATSAPP CONECTADO
 // =====================================
 client.on("ready", () => {
-  console.log("✅ Tudo certo! O robô do Mosteiro está conectado.");
+  console.log("✅ Tudo certo! O robô do Mosteiro está conectado e estável na nuvem.");
 });
 
-// =====================================
-// DESCONEXÃO
-// =====================================
 client.on("disconnected", (reason) => {
   console.log("⚠️ Desconectado:", reason);
 });
@@ -65,7 +65,6 @@ client.on("disconnected", (reason) => {
 // INICIALIZA O SISTEMA
 client.initialize();
 
-// FUNÇÃO DE ESPERA (Simular digitação humana)
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
 // =====================================
@@ -86,7 +85,6 @@ client.on("message", async (msg) => {
       await delay(2000);
     };
 
-    // 1️⃣ MENSAGEM INICIAL / MENU principal
     if (/^(menu|oi|olá|ola|bom dia|boa tarde|boa noite|pax)$/i.test(texto)) {
       await simularDigitando();
 
@@ -111,7 +109,6 @@ client.on("message", async (msg) => {
       return;
     }
 
-    // 2️⃣ RESPOSTAS DO MENU
     if (texto === "1") {
       await simularDigitando();
       await client.sendMessage(msg.from, 
