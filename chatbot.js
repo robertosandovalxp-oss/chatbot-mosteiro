@@ -1,11 +1,24 @@
 // =====================================
-// IMPORTAÇÕES (Essenciais para corrigir o erro)
+// IMPORTAÇÕES
 // =====================================
 const qrcode = require("qrcode-terminal");
 const { Client, LocalAuth } = require("whatsapp-web.js");
+const http = require("http"); // Servidor nativo para o Render não derrubar a máquina
 
 // =====================================
-// CONFIGURAÇÃO DO CLIENTE (VERSÃO DOCKER EVASÃO)
+// SERVIDOR WEB FALSO (Para satisfazer o Render)
+// =====================================
+const PORT = process.env.PORT || 10000;
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+  res.end("Robô do Mosteiro ativo 🌿");
+});
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`📡 Servidor de monitoramento escutando na porta ${PORT}`);
+});
+
+// =====================================
+// CONFIGURAÇÃO DO CLIENTE (VERSÃO BLINDADA)
 // =====================================
 const client = new Client({
   authStrategy: new LocalAuth(),
