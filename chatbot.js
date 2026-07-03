@@ -1,4 +1,4 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require("@whiskeysockets/baileys");
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require("@whiskeysockets/baileys");
 const qrcode = require("qrcode-terminal");
 const http = require("http");
 const pino = require("pino");
@@ -41,11 +41,17 @@ server.listen(PORT, "0.0.0.0");
 // =====================================
 async function iniciarBot() {
   const { state, saveCreds } = await useMultiFileAuthState("./auth_mosteiro");
+  
+  // 🔹 Puxa a versão mais atualizada do WhatsApp Web para não ser rejeitado
+  const { version, isLatest } = await fetchLatestBaileysVersion();
+  console.log(`📡 Usando WhatsApp Web v${version.join('.')}, isLatest: ${isLatest}`);
 
   const sock = makeWASocket({
+    version,
     auth: state,
-    logger: pino({ level: "silent" }), // Desativa logs pesados para economizar memória
-    printQRInTerminal: true
+    logger: pino({ level: "silent" }),
+    printQRInTerminal: false, // 🔹 Desativa o aviso amarelo (vamos imprimir manualmente)
+    browser: ['Robo Mosteiro', 'Chrome', '1.0.0'] // 🔹 Disfarce para o WhatsApp aceitar a conexão
   });
 
   sock.ev.on("creds.update", saveCreds);
@@ -53,15 +59,27 @@ async function iniciarBot() {
   sock.ev.on("connection.update", (update) => {
     const { connection, lastDisconnect, qr } = update;
     
+    // 🔹 Imprime o QR Code limpo sem os avisos antigos
     if (qr) {
       qrAtual = qr;
+      console.log("📲 Novo QR Code gerado! Abra a página web ou escaneie abaixo:");
+      qrcode.generate(qr, { small: true });
     }
 
     if (connection === "close") {
       conectado = false;
-      const deviaReiniciar = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-      console.log("⚠️ Conexão fechada. Reiniciando...", deviaReiniciar);
-      if (deviaReiniciar) iniciarBot();
+      const statusCode = lastDisconnect?.error?.output?.statusCode;
+      const deviaReiniciar = statusCode !== DisconnectReason.loggedOut;
+      
+      console.log(`⚠️ Conexão fechada. Código de erro: ${statusCode}`);
+      
+      if (deviaReiniciar) {
+        console.log("⏳ Aguardando 5 segundos para tentar reconectar...");
+        // 🔹 Pausa de 5 segundos quebra o loop infinito e acalma o servidor
+        setTimeout(iniciarBot, 5000); 
+      } else {
+        console.log("❌ O celular foi desconectado manualmente. Precisaremos ler o QR Code de novo.");
+      }
     } else if (connection === "open") {
       conectado = true;
       qrAtual = "";
@@ -78,12 +96,11 @@ async function iniciarBot() {
       if (!msg.message || msg.key.fromMe) return;
 
       const remetente = msg.key.remoteJid;
-      if (remetente.endsWith("@g.us")) return; // Ignora grupos
+      if (remetente.endsWith("@g.us")) return;
 
       const textoOriginal = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
       const texto = textoOriginal.trim().toLowerCase();
 
-      // Simulação de presença
       await sock.sendPresenceUpdate("composing", remetente);
       await new Promise(res => setTimeout(res, 2000));
 
@@ -95,14 +112,7 @@ async function iniciarBot() {
         else saudacao = "Boa noite! PAX!";
 
         await sock.sendMessage(remetente, {
-          text: `${saudacao} 🌿\n\n` +
-                `Você está em contato com o atendimento automático do *Mosteiro da Transfiguração*.\n\n` +
-                `Para que eu possa te ajudar melhor, digite o número da opção desejada:\n\n` +
-                `*1* - Horários de Missas e Ofícios\n` +
-                `*2* - Como fazer um Retiro\n` +
-                `*3* - Enviar um Pedido de Oração\n` +
-                `*4* - Localização e Contato\n` +
-                `*5* - Falar com um irmão (Atendimento Humano)`
+          text: `${saudacao} 🌿\n\nVocê está em contato com o atendimento automático do *Mosteiro da Transfiguração*.\n\nPara que eu possa te ajudar melhor, digite o número da opção desejada:\n\n*1* - Horários de Missas e Ofícios\n*2* - Como fazer um Retiro\n*3* - Enviar um Pedido de Oração\n*4* - Localização e Contato\n*5* - Falar com um irmão (Atendimento Humano)`
         });
       } 
       else if (texto === "1") {
