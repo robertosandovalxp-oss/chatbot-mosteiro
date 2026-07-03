@@ -5,20 +5,18 @@ const qrcode = require("qrcode-terminal");
 const { Client, MessageMedia, LocalAuth } = require("whatsapp-web.js");
 
 // =====================================
-// CONFIGURAÇÃO DO CLIENTE (MUDANÇA DE PARÂMETROS)
+// CONFIGURAÇÃO DO CLIENTE (VERSÃO PARA NUVEM)
 // =====================================
 const client = new Client({
-  // Se o erro persistir mesmo assim, precisaremos tirar o projeto da pasta do OneDrive
   authStrategy: new LocalAuth(),
   puppeteer: {
     headless: true,
-    executablePath: "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    // Deixamos sem o caminho fixo do Windows para o Render usar o Chrome do Linux dele
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
       "--disable-dev-shm-usage",
       "--disable-gpu",
-      // Removemos o '--single-process' que costuma quebrar o Edge/Chrome novos
       "--no-first-run",
       "--no-default-browser-check",
       "--disable-extensions"
