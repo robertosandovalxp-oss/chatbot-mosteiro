@@ -2,30 +2,57 @@
 // IMPORTAÇÕES
 // =====================================
 const qrcode = require("qrcode-terminal");
-const { Client, RemoteAuth } = require("whatsapp-web.js"); // Usando RemoteAuth para permissão total de leitura
+const { Client, LocalAuth } = require("whatsapp-web.js");
 const http = require("http");
 
 // =====================================
-// SERVIDOR WEB
+// SERVIDOR WEB (Satisfaz o scan do Render)
 // =====================================
+let qrAtual = "";
+let conectado = false;
+
 const PORT = process.env.PORT || 10000;
 const server = http.createServer((req, res) => {
   res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-  res.end("<h1>🤖 Robô do Mosteiro ativo e monitorando mensagens!</h1>");
+  
+  if (conectado) {
+    res.end("<h1>✅ O robô do Mosteiro está conectado e operando na nuvem!</h1>");
+    return;
+  }
+
+  if (!qrAtual) {
+    res.end("<h1>⏳ Aguarde... O robô está iniciando na nuvem. Atualize a página em breve.</h1>");
+    return;
+  }
+
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrAtual)}`;
+  
+  res.end(`
+    <div style="text-align: center; font-family: sans-serif; margin-top: 50px;">
+      <h2>🌿 Conexão do Robô do Mosteiro 🌿</h2>
+      <p>Abra o WhatsApp no celular, vá em <b>Aparelhos Conectados</b> e escaneie o código abaixo:</p>
+      <div style="margin: 20px 0;">
+        <img src="${qrUrl}" alt="QR Code WhatsApp" style="border: 10px solid white; box-shadow: 0px 0px 10px rgba(0,0,0,0.1);" />
+      </div>
+      <p><i>A página atualiza automaticamente.</i></p>
+      <script>
+        setTimeout(() => { location.reload(); }, 20000);
+      </script>
+    </div>
+  `);
 });
+
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`📡 Servidor ativo na porta ${PORT}`);
+  console.log(`📡 Servidor de monitoramento ativo na porta ${PORT}`);
 });
 
 // =====================================
-// CONFIGURAÇÃO DO CLIENTE (PERMISSÃO TOTAL)
+// CONFIGURAÇÃO DO CLIENTE (NUVEM DO RENDER)
 // =====================================
 const client = new Client({
-  authStrategy: new RemoteAuth({
-    clientId: "mosteiro-session",
-    dataPath: "./.wwebjs_auth",
-    backupSyncIntervalMs: 60000
-  }),
+  authStrategy: new LocalAuth({
+    dataPath: "/app/.wwebjs_auth" // Salva dentro da pasta segura do contêiner Docker
+  }), 
   puppeteer: {
     headless: true,
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
@@ -39,40 +66,41 @@ const client = new Client({
       '--disable-extensions',
       '--disable-component-update',
       '--disable-web-security',
-      '--disable-features=IsolateOrigins,site-per-process'
+      '--disable-blink-features=AutomationControlled' // O segredo para o WhatsApp Web não travar a injeção de scripts
     ],
   },
 });
 
 // =====================================
-// QR CODE
+// EVENTOS DO WHATSAPP
 // =====================================
 client.on("qr", (qr) => {
-  console.log("📲 Novo QR Code gerado nos logs.");
+  qrAtual = qr;
+  console.log("📲 Novo QR Code gerado.");
+  qrcode.generate(qr, { small: true });
 });
 
-// =====================================
-// WHATSAPP CONECTADO
-// =====================================
 client.on("ready", () => {
-  console.log("✅ Conectado com sucesso! Monitorando e respondendo mensagens agora.");
+  conectado = true;
+  console.log("✅ Tudo certo! O robô do Mosteiro está conectado e respondendo mensagens.");
 });
 
-client.on("remote_session_saved", () => {
-  console.log("💾 Sessão salva com sucesso na nuvem!");
+client.on("disconnected", (reason) => {
+  conectado = false;
+  console.log("⚠️ Desconectado:", reason);
 });
 
-// FUNÇÃO DE ESPERA
+// INICIALIZA O SISTEMA
+client.initialize();
+
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
 // =====================================
 // FUNIL DE ATENDIMENTO DO MOSTEIRO
 // =====================================
-client.on("message_create", async (msg) => { // Mudado para message_create para garantir captura em nuvem
+client.on("message_create", async (msg) => {
   try {
     if (!msg.from || msg.from.endsWith("@g.us")) return;
-    
-    // Evita que o robô responda a si mesmo
     if (msg.fromMe) return;
 
     const chat = await msg.getChat();
