@@ -5,13 +5,14 @@ const qrcode = require("qrcode-terminal");
 const { Client, MessageMedia, LocalAuth } = require("whatsapp-web.js");
 
 // =====================================
-// CONFIGURAÇÃO DO CLIENTE (VERSÃO PARA NUVEM)
+// CONFIGURAÇÃO DO CLIENTE (VERSÃO DOCKER NUVEM)
 // =====================================
 const client = new Client({
   authStrategy: new LocalAuth(),
   puppeteer: {
     headless: true,
-    // Deixamos sem o caminho fixo do Windows para o Render usar o Chrome do Linux dele
+    // O User-Agent abaixo finge ser um Windows normal para evitar a queda do contexto
+    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
@@ -19,7 +20,8 @@ const client = new Client({
       "--disable-gpu",
       "--no-first-run",
       "--no-default-browser-check",
-      "--disable-extensions"
+      "--disable-extensions",
+      "--disable-component-update"
     ],
   },
 });
