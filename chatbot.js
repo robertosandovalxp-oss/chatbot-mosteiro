@@ -2,23 +2,54 @@
 // IMPORTAÇÕES
 // =====================================
 const qrcode = require("qrcode-terminal");
-const { Client, NoAuth } = require("whatsapp-web.js"); // Mudamos temporariamente para NoAuth para estabilizar o contêiner
+const { Client, NoAuth } = require("whatsapp-web.js");
 const http = require("http");
 
+// Variável global para guardar o QR Code em formato de texto/imagem
+let qrAtual = "";
+let conectado = false;
+
 // =====================================
-// SERVIDOR WEB (Mantém o Render estável)
+// SERVIDOR WEB (Exibe o QR Code legível na internet)
 // =====================================
 const PORT = process.env.PORT || 10000;
 const server = http.createServer((req, res) => {
-  res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
-  res.end("Robô do Mosteiro ativo e monitorado 🌿");
+  res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+  
+  if (conectado) {
+    res.end("<h1>✅ O robô do Mosteiro já está conectado e operando!</h1>");
+    return;
+  }
+
+  if (!qrAtual) {
+    res.end("<h1>⏳ Aguarde um instante... O robô está gerando o QR Code na nuvem. Atualize a página em alguns segundos.</h1>");
+    return;
+  }
+
+  // Gera uma página simples com o QR Code formatado corretamente usando uma API gratuita
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrAtual)}`;
+  
+  res.end(`
+    <div style="text-align: center; font-family: sans-serif; margin-top: 50px;">
+      <h2>🌿 Conexão do Robô do Mosteiro 🌿</h2>
+      <p>Abra o WhatsApp no celular, vá em <b>Aparelhos Conectados</b> e escaneie o código abaixo:</p>
+      <div style="margin: 20px 0;">
+        <img src="${qrUrl}" alt="QR Code WhatsApp" style="border: 10px solid white; box-shadow: 0px 0px 10px rgba(0,0,0,0.1);" />
+      </div>
+      <p><i>A página atualiza o código automaticamente se ele expirar.</i></p>
+      <script>
+        setTimeout(() => { location.reload(); }, 20000);
+      </script>
+    </div>
+  `);
 });
+
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`📡 Servidor de monitoramento ativo na porta ${PORT}`);
 });
 
 // =====================================
-// CONFIGURAÇÃO DO CLIENTE (MÁXIMA ESTABILIDADE)
+// CONFIGURAÇÃO DO CLIENTE
 // =====================================
 const client = new Client({
   authStrategy: new NoAuth(), 
@@ -37,17 +68,17 @@ const client = new Client({
       '--disable-web-security',
       '--disable-features=IsolateOrigins,site-per-process',
       '--disable-session-crashed-bubble',
-      '--disable-infobars',
-      '--unhandled-rejections=strict'
+      '--disable-infobars'
     ],
   },
 });
 
 // =====================================
-// QR CODE
+// CAPTURA DO QR CODE
 // =====================================
 client.on("qr", (qr) => {
-  console.log("📲 ESCANEIE O QR CODE ABAIXO:");
+  qrAtual = qr; // Salva o código para exibir na página web
+  console.log("📲 QR Code gerado em texto (veja a página web para escanear):");
   qrcode.generate(qr, { small: true });
 });
 
@@ -55,10 +86,12 @@ client.on("qr", (qr) => {
 // WHATSAPP CONECTADO
 // =====================================
 client.on("ready", () => {
+  conectado = true;
   console.log("✅ Tudo certo! O robô do Mosteiro está conectado e estável na nuvem.");
 });
 
 client.on("disconnected", (reason) => {
+  conectado = false;
   console.log("⚠️ Desconectado:", reason);
 });
 
@@ -73,7 +106,6 @@ const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 client.on("message", async (msg) => {
   try {
     if (!msg.from || msg.from.endsWith("@g.us")) return;
-
     const chat = await msg.getChat();
     if (chat.isGroup) return; 
 
@@ -87,16 +119,13 @@ client.on("message", async (msg) => {
 
     if (/^(menu|oi|olá|ola|bom dia|boa tarde|boa noite|pax)$/i.test(texto)) {
       await simularDigitando();
-
       const hora = new Date().getHours();
       let saudacao = "PAX!";
-
       if (hora >= 5 && hora < 12) saudacao = "Bom dia! PAX!";
       else if (hora >= 12 && hora < 18) saudacao = "Boa tarde! PAX!";
       else saudacao = "Boa noite! PAX!";
 
-      await client.sendMessage(
-        msg.from,
+      await client.sendMessage(msg.from,
         `${saudacao} 🌿\n\n` +
         `Você está em contato com o atendimento automático do *Mosteiro da Transfiguração*.\n\n` +
         `Para que eu possa te ajudar melhor, digite o número da opção desejada:\n\n` +
@@ -149,7 +178,6 @@ client.on("message", async (msg) => {
         "Entendido! Um dos irmãos lerá sua mensagem em breve para te responder pessoalmente. Por favor, aguarde um momento."
       );
     }
-
   } catch (error) {
     console.error("❌ Erro no processamento:", error);
   }
