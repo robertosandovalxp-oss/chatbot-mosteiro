@@ -2,57 +2,30 @@
 // IMPORTAÇÕES
 // =====================================
 const qrcode = require("qrcode-terminal");
-const { Client, NoAuth } = require("whatsapp-web.js");
+const { Client, RemoteAuth } = require("whatsapp-web.js"); // Usando RemoteAuth para permissão total de leitura
 const http = require("http");
 
-// Variável global para guardar o QR Code em formato de texto/imagem
-let qrAtual = "";
-let conectado = false;
-
 // =====================================
-// SERVIDOR WEB (Exibe o QR Code legível na internet)
+// SERVIDOR WEB
 // =====================================
 const PORT = process.env.PORT || 10000;
 const server = http.createServer((req, res) => {
   res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-  
-  if (conectado) {
-    res.end("<h1>✅ O robô do Mosteiro já está conectado e operando!</h1>");
-    return;
-  }
-
-  if (!qrAtual) {
-    res.end("<h1>⏳ Aguarde um instante... O robô está gerando o QR Code na nuvem. Atualize a página em alguns segundos.</h1>");
-    return;
-  }
-
-  // Gera uma página simples com o QR Code formatado corretamente usando uma API gratuita
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrAtual)}`;
-  
-  res.end(`
-    <div style="text-align: center; font-family: sans-serif; margin-top: 50px;">
-      <h2>🌿 Conexão do Robô do Mosteiro 🌿</h2>
-      <p>Abra o WhatsApp no celular, vá em <b>Aparelhos Conectados</b> e escaneie o código abaixo:</p>
-      <div style="margin: 20px 0;">
-        <img src="${qrUrl}" alt="QR Code WhatsApp" style="border: 10px solid white; box-shadow: 0px 0px 10px rgba(0,0,0,0.1);" />
-      </div>
-      <p><i>A página atualiza o código automaticamente se ele expirar.</i></p>
-      <script>
-        setTimeout(() => { location.reload(); }, 20000);
-      </script>
-    </div>
-  `);
+  res.end("<h1>🤖 Robô do Mosteiro ativo e monitorando mensagens!</h1>");
 });
-
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`📡 Servidor de monitoramento ativo na porta ${PORT}`);
+  console.log(`📡 Servidor ativo na porta ${PORT}`);
 });
 
 // =====================================
-// CONFIGURAÇÃO DO CLIENTE
+// CONFIGURAÇÃO DO CLIENTE (PERMISSÃO TOTAL)
 // =====================================
 const client = new Client({
-  authStrategy: new NoAuth(), 
+  authStrategy: new RemoteAuth({
+    clientId: "mosteiro-session",
+    dataPath: "./.wwebjs_auth",
+    backupSyncIntervalMs: 60000
+  }),
   puppeteer: {
     headless: true,
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
@@ -66,55 +39,50 @@ const client = new Client({
       '--disable-extensions',
       '--disable-component-update',
       '--disable-web-security',
-      '--disable-features=IsolateOrigins,site-per-process',
-      '--disable-session-crashed-bubble',
-      '--disable-infobars'
+      '--disable-features=IsolateOrigins,site-per-process'
     ],
   },
 });
 
 // =====================================
-// CAPTURA DO QR CODE
+// QR CODE
 // =====================================
 client.on("qr", (qr) => {
-  qrAtual = qr; // Salva o código para exibir na página web
-  console.log("📲 QR Code gerado em texto (veja a página web para escanear):");
-  qrcode.generate(qr, { small: true });
+  console.log("📲 Novo QR Code gerado nos logs.");
 });
 
 // =====================================
 // WHATSAPP CONECTADO
 // =====================================
 client.on("ready", () => {
-  conectado = true;
-  console.log("✅ Tudo certo! O robô do Mosteiro está conectado e estável na nuvem.");
+  console.log("✅ Conectado com sucesso! Monitorando e respondendo mensagens agora.");
 });
 
-client.on("disconnected", (reason) => {
-  conectado = false;
-  console.log("⚠️ Desconectado:", reason);
+client.on("remote_session_saved", () => {
+  console.log("💾 Sessão salva com sucesso na nuvem!");
 });
 
-// INICIALIZA O SISTEMA
-client.initialize();
-
+// FUNÇÃO DE ESPERA
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
 // =====================================
 // FUNIL DE ATENDIMENTO DO MOSTEIRO
 // =====================================
-client.on("message", async (msg) => {
+client.on("message_create", async (msg) => { // Mudado para message_create para garantir captura em nuvem
   try {
     if (!msg.from || msg.from.endsWith("@g.us")) return;
+    
+    // Evita que o robô responda a si mesmo
+    if (msg.fromMe) return;
+
     const chat = await msg.getChat();
     if (chat.isGroup) return; 
 
     const texto = msg.body ? msg.body.trim().toLowerCase() : "";
 
     const simularDigitando = async () => {
-      await delay(1500);
       await chat.sendStateTyping();
-      await delay(2000);
+      await delay(2500);
     };
 
     if (/^(menu|oi|olá|ola|bom dia|boa tarde|boa noite|pax)$/i.test(texto)) {
