@@ -1,38 +1,47 @@
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } = require("@whiskeysockets/baileys");
-const qrcode = require("qrcode-terminal");
 const http = require("http");
 const pino = require("pino");
 
-let qrAtual = "";
 let conectado = false;
+let codigoPareamento = "";
 
 // =====================================
-// SERVIDOR WEB (Monitoramento do Render)
+// ⚠️ COLOQUE O NÚMERO DO WHATSAPP DO MOSTEIRO ABAIXO (Apenas números)
+// Exemplo: 55 (Brasil) + 11 (DDD) + 999999999 (Número)
+// =====================================
+const NUMERO_BOT = "551125002858"; 
+
+// =====================================
+// SERVIDOR WEB (Exibe o Código de 8 Dígitos)
 // =====================================
 const PORT = process.env.PORT || 10000;
 const server = http.createServer((req, res) => {
   res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
   
   if (conectado) {
-    res.end("<h1>✅ O robô do Mosteiro está conectado e operando de forma estável!</h1>");
+    res.end("<div style='text-align:center; margin-top:50px; font-family:sans-serif;'><h1>✅ O robô do Mosteiro está conectado e operando!</h1></div>");
     return;
   }
-  if (!qrAtual) {
-    res.end("<h1>⏳ Aguarde... Gerando o QR Code na nuvem. Atualize a página em breve.</h1>");
+  
+  if (codigoPareamento) {
+    res.end(`
+      <div style="text-align: center; font-family: sans-serif; margin-top: 50px;">
+        <h2>🌿 Conexão do Robô do Mosteiro 🌿</h2>
+        <p>Não usaremos mais QR Code. Siga os passos no celular do Mosteiro:</p>
+        <ol style="display: inline-block; text-align: left;">
+          <li>Abra o WhatsApp e vá em <b>Aparelhos Conectados</b></li>
+          <li>Toque em <b>Conectar um aparelho</b></li>
+          <li>Na tela da câmera, toque em <b>Conectar com número de telefone</b> (na parte de baixo)</li>
+          <li>Digite o código abaixo:</li>
+        </ol>
+        <h1 style="font-size: 50px; letter-spacing: 5px; color: #128C7E;">${codigoPareamento}</h1>
+        <script>setTimeout(() => { location.reload(); }, 15000);</script>
+      </div>
+    `);
     return;
   }
 
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrAtual)}`;
-  res.end(`
-    <div style="text-align: center; font-family: sans-serif; margin-top: 50px;">
-      <h2>🌿 Conexão do Robô do Mosteiro (Versão Leve) 🌿</h2>
-      <p>Abra o WhatsApp no celular, vá em <b>Aparelhos Conectados</b> e escaneie o código abaixo:</p>
-      <div style="margin: 20px 0;">
-        <img src="${qrUrl}" alt="QR Code WhatsApp" style="border: 10px solid white; box-shadow: 0px 0px 10px rgba(0,0,0,0.1);" />
-      </div>
-      <script>setTimeout(() => { location.reload(); }, 20000);</script>
-    </div>
-  `);
+  res.end("<div style='text-align:center; margin-top:50px; font-family:sans-serif;'><h1>⏳ Gerando código de emparelhamento... Atualize em instantes.</h1></div>");
 });
 server.listen(PORT, "0.0.0.0");
 
@@ -41,47 +50,48 @@ server.listen(PORT, "0.0.0.0");
 // =====================================
 async function iniciarBot() {
   const { state, saveCreds } = await useMultiFileAuthState("./auth_mosteiro");
+  const { version } = await fetchLatestBaileysVersion();
   
-  const { version, isLatest } = await fetchLatestBaileysVersion();
-  console.log(`📡 Usando WhatsApp Web v${version.join('.')}`);
-
   const sock = makeWASocket({
     version,
     auth: state,
     logger: pino({ level: "silent" }),
     printQRInTerminal: false,
-    
-    // 🔹 PROTEÇÕES CONTRA QUEDA DE MEMÓRIA NO RENDER
-    browser: Browsers.macOS('Desktop'), // Disfarce oficial e atualizado da biblioteca
-    syncFullHistory: false, // CRÍTICO: Impede que o WhatsApp envie gigabytes de histórico antigo e trave a nuvem
-    generateHighQualityLinkPreview: false, // Economiza processamento
-    connectTimeoutMs: 60000,
-    keepAliveIntervalMs: 10000
+    browser: Browsers.macOS('Desktop'),
+    syncFullHistory: false
   });
+
+  // 🔹 SOLICITA O CÓDIGO DE EMPARELHAMENTO SE NÃO ESTIVER LOGADO
+  if (!sock.authState.creds.me) {
+    setTimeout(async () => {
+      try {
+        const code = await sock.requestPairingCode(NUMERO_BOT);
+        // Formata o código para ficar bonito na tela (XXXX-XXXX)
+        codigoPareamento = code?.match(/.{1,4}/g)?.join("-") || code;
+        console.log(`📲 CÓDIGO DE CONEXÃO GERADO: ${codigoPareamento}`);
+      } catch (err) {
+        console.error("❌ Erro ao gerar código de pareamento:", err);
+      }
+    }, 3000);
+  }
 
   sock.ev.on("creds.update", saveCreds);
 
   sock.ev.on("connection.update", (update) => {
-    const { connection, lastDisconnect, qr } = update;
+    const { connection, lastDisconnect } = update;
     
-    if (qr) {
-      qrAtual = qr;
-      console.log("📲 Novo QR Code gerado! Veja a página web.");
-    }
-
     if (connection === "close") {
       conectado = false;
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       const deviaReiniciar = statusCode !== DisconnectReason.loggedOut;
       
       console.log(`⚠️ Conexão fechada. Código: ${statusCode}`);
-      
       if (deviaReiniciar) {
         setTimeout(iniciarBot, 5000); 
       }
     } else if (connection === "open") {
       conectado = true;
-      qrAtual = "";
+      codigoPareamento = "";
       console.log("✅ Robô do Mosteiro conectado com sucesso e 100% estável!");
     }
   });
