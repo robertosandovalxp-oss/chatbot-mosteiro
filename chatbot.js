@@ -1,4 +1,4 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require("@whiskeysockets/baileys");
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } = require("@whiskeysockets/baileys");
 const qrcode = require("qrcode-terminal");
 const http = require("http");
 const pino = require("pino");
@@ -42,16 +42,21 @@ server.listen(PORT, "0.0.0.0");
 async function iniciarBot() {
   const { state, saveCreds } = await useMultiFileAuthState("./auth_mosteiro");
   
-  // 🔹 Puxa a versão mais atualizada do WhatsApp Web para não ser rejeitado
   const { version, isLatest } = await fetchLatestBaileysVersion();
-  console.log(`📡 Usando WhatsApp Web v${version.join('.')}, isLatest: ${isLatest}`);
+  console.log(`📡 Usando WhatsApp Web v${version.join('.')}`);
 
   const sock = makeWASocket({
     version,
     auth: state,
     logger: pino({ level: "silent" }),
-    printQRInTerminal: false, // 🔹 Desativa o aviso amarelo (vamos imprimir manualmente)
-    browser: ['Robo Mosteiro', 'Chrome', '1.0.0'] // 🔹 Disfarce para o WhatsApp aceitar a conexão
+    printQRInTerminal: false,
+    
+    // 🔹 PROTEÇÕES CONTRA QUEDA DE MEMÓRIA NO RENDER
+    browser: Browsers.macOS('Desktop'), // Disfarce oficial e atualizado da biblioteca
+    syncFullHistory: false, // CRÍTICO: Impede que o WhatsApp envie gigabytes de histórico antigo e trave a nuvem
+    generateHighQualityLinkPreview: false, // Economiza processamento
+    connectTimeoutMs: 60000,
+    keepAliveIntervalMs: 10000
   });
 
   sock.ev.on("creds.update", saveCreds);
@@ -59,11 +64,9 @@ async function iniciarBot() {
   sock.ev.on("connection.update", (update) => {
     const { connection, lastDisconnect, qr } = update;
     
-    // 🔹 Imprime o QR Code limpo sem os avisos antigos
     if (qr) {
       qrAtual = qr;
-      console.log("📲 Novo QR Code gerado! Abra a página web ou escaneie abaixo:");
-      qrcode.generate(qr, { small: true });
+      console.log("📲 Novo QR Code gerado! Veja a página web.");
     }
 
     if (connection === "close") {
@@ -71,14 +74,10 @@ async function iniciarBot() {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       const deviaReiniciar = statusCode !== DisconnectReason.loggedOut;
       
-      console.log(`⚠️ Conexão fechada. Código de erro: ${statusCode}`);
+      console.log(`⚠️ Conexão fechada. Código: ${statusCode}`);
       
       if (deviaReiniciar) {
-        console.log("⏳ Aguardando 5 segundos para tentar reconectar...");
-        // 🔹 Pausa de 5 segundos quebra o loop infinito e acalma o servidor
         setTimeout(iniciarBot, 5000); 
-      } else {
-        console.log("❌ O celular foi desconectado manualmente. Precisaremos ler o QR Code de novo.");
       }
     } else if (connection === "open") {
       conectado = true;
